@@ -1,0 +1,478 @@
+// Database schema for one store deployment.
+// Each client deployment gets its own database; there is no tenant column.
+//
+// Money is stored as integers in the currency's minor unit (kobo, cents, ...).
+// The currency itself lives in the "commerce" Setting and is snapshotted on each order.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Store configuration (runtime source of truth, seeded from src/config)
+// ─────────────────────────────────────────────────────────────
+
+/// Key/value store settings. Keys: business, branding, commerce, features, navigation,
+/// announcement, footer. Values are validated with zod (src/lib/settings-schema.ts).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+enum HomepageBlockType {
+  HERO
+  CATEGORY_STRIP
+  FEATURED_PRODUCTS
+  PROMO_BANNER
+  BENEFITS
+  NEWSLETTER
+}
+
+model HomepageBlock {
+  id        String            @id @default(cuid())
+  type      HomepageBlockType
+  position  Int               @default(0)
+  enabled   Boolean           @default(true)
+  /// Block-specific content, validated per type with zod.
+  content   Json
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([position])
+}
+
+model ShippingMethod {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  price       Int
+  /// Order subtotal at or above which shipping is free. Null = never free.
+  freeOver    Int?
+  etaText     String?
+  isActive    Boolean  @default(true)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Catalogue
+// ─────────────────────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  name        String
+  description String?
+  imageUrl    String?
+  /// Icon key from the storefront icon set, used when there is no image.
+  icon        String?
+  position    Int        @default(0)
+  isActive    Boolean    @default(true)
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryTree")
+  products    Product[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([isActive, position])
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model Product {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  name             String
+  shortDescription String?
+  description      String?
+  brand            String?
+  status           ProductStatus    @default(DRAFT)
+  isFeatured       Boolean          @default(false)
+  categoryId       String?
+  category         Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// Base selling price; a variant may override it.
+  price            Int
+  /// Original price shown struck through. Null = not on sale.
+  compareAtPrice   Int?
+  /// Free-form attributes shown on the product page (material, warranty, ...).
+  attributes       Json?
+  ratingAvg        Float            @default(0)
+  ratingCount      Int              @default(0)
+  salesCount       Int              @default(0)
+  images           ProductImage[]
+  variants         ProductVariant[]
+  reviews          Review[]
+  orderItems       OrderItem[]
+  wishlistItems    WishlistItem[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([status, categoryId])
+  @@index([status, isFeatured])
+  @@index([createdAt])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int     @default(0)
+
+  @@index([productId, position])
+}
+
+/// Every product has at least one variant. Stock is tracked per variant.
+model ProductVariant {
+  id                   String                @id @default(cuid())
+  productId            String
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku                  String                @unique
+  /// Display name, e.g. "Default", "Black / M".
+  name                 String                @default("Default")
+  /// Option values, e.g. { "color": "Black", "size": "M" }.
+  options              Json?
+  /// Overrides Product.price when set.
+  price                Int?
+  stock                Int                   @default(0)
+  lowStockThreshold    Int                   @default(5)
+  position             Int                   @default(0)
+  isActive             Boolean               @default(true)
+  inventoryAdjustments InventoryAdjustment[]
+  orderItems           OrderItem[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([productId, position])
+}
+
+enum InventoryReason {
+  INITIAL
+  RESTOCK
+  SALE
+  RETURN
+  CANCELLATION
+  CORRECTION
+  DAMAGE
+}
+
+model InventoryAdjustment {
+  id          String          @id @default(cuid())
+  variantId   String
+  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  delta       Int
+  stockAfter  Int
+  reason      InventoryReason
+  note        String?
+  orderId     String?
+  order       Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  adminUserId String?
+  adminUser   AdminUser?      @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+
+  @@index([variantId, createdAt])
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Review {
+  id         String       @id @default(cuid())
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId String?
+  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  authorName String
+  rating     Int
+  title      String?
+  body       String?
+  status     ReviewStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([productId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Customers (storefront accounts)
+// ─────────────────────────────────────────────────────────────
+
+model Customer {
+  id              String               @id @default(cuid())
+  email           String               @unique
+  /// argon2id hash. Null for guest customers created at checkout.
+  passwordHash    String?
+  firstName       String?
+  lastName        String?
+  phone           String?
+  emailVerifiedAt DateTime?
+  isActive        Boolean              @default(true)
+  addresses       Address[]
+  orders          Order[]
+  reviews         Review[]
+  wishlistItems   WishlistItem[]
+  sessions        CustomerSession[]
+  resetTokens     PasswordResetToken[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  label      String?
+  fullName   String
+  phone      String?
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+/// Session row keyed by a SHA-256 hash of the cookie token; the raw token never touches the DB.
+model CustomerSession {
+  id         String   @id
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+/// Keyed by a SHA-256 hash of the emailed token.
+model PasswordResetToken {
+  id         String    @id
+  customerId String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+model WishlistItem {
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([customerId, productId])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Orders, payments, coupons
+// ─────────────────────────────────────────────────────────────
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum FulfillmentStatus {
+  UNFULFILLED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+model Order {
+  id                   String                @id @default(cuid())
+  /// Human-facing order number, e.g. "SE-100042".
+  number               String                @unique
+  customerId           String?
+  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  email                String
+  phone                String?
+  customerName         String
+  /// Snapshot of the delivery address at the time of order.
+  shippingAddress      Json
+  shippingMethodCode   String
+  shippingMethodName   String
+  currency             String
+  subtotal             Int
+  discountTotal        Int                   @default(0)
+  shippingTotal        Int                   @default(0)
+  taxTotal             Int                   @default(0)
+  total                Int
+  couponId             String?
+  coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  couponCode           String?
+  paymentStatus        PaymentStatus         @default(UNPAID)
+  fulfillmentStatus    FulfillmentStatus     @default(UNFULFILLED)
+  notes                String?
+  items                OrderItem[]
+  payments             Payment[]
+  events               OrderEvent[]
+  inventoryAdjustments InventoryAdjustment[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([paymentStatus, fulfillmentStatus])
+}
+
+/// Line items snapshot product data so later catalogue edits never change past orders.
+model OrderItem {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId   String?
+  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  name        String
+  variantName String?
+  sku         String
+  imageUrl    String?
+  unitPrice   Int
+  quantity    Int
+  lineTotal   Int
+
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  /// "system", "customer", or an admin user id.
+  actor     String   @default("system")
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// Provider key, e.g. "mock", "paystack", "stripe".
+  provider    String
+  providerRef String?
+  amount      Int
+  currency    String
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([provider, providerRef])
+  @@index([orderId])
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+  FREE_SHIPPING
+}
+
+model Coupon {
+  id          String     @id @default(cuid())
+  code        String     @unique
+  description String?
+  type        CouponType
+  /// Percent (0-100) for PERCENT, minor units for FIXED, ignored for FREE_SHIPPING.
+  value       Int        @default(0)
+  minSubtotal Int?
+  maxUses     Int?
+  usedCount   Int        @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean    @default(true)
+  orders      Order[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────────────────────
+
+enum AdminRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+model AdminUser {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String
+  /// argon2id hash.
+  passwordHash         String
+  role                 AdminRole             @default(STAFF)
+  isActive             Boolean               @default(true)
+  lastLoginAt          DateTime?
+  sessions             AdminSession[]
+  auditLogs            AuditLog[]
+  inventoryAdjustments InventoryAdjustment[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+}
+
+/// Keyed by a SHA-256 hash of the cookie token.
+model AdminSession {
+  id          String    @id
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId])
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  action      String
+  entity      String
+  entityId    String?
+  data        Json?
+  createdAt   DateTime   @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
