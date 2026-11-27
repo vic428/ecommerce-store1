@@ -42,12 +42,20 @@ test("client bundles contain no server secrets", async () => {
 
   const secrets = [
     process.env.DATABASE_URL,
+    process.env.SUPABASE_SECRET_KEY,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     process.env.PAYMENT_SECRET_KEY,
     process.env.PAYMENT_WEBHOOK_SECRET,
     process.env.AUTH_SECRET,
   ].filter((v): v is string => !!v && v.length >= 8);
-  const markers = ["DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "PAYMENT_SECRET_KEY", "service_role"];
+  const markers = [
+    "DATABASE_URL",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "PAYMENT_SECRET_KEY",
+    "service_role",
+    "sb_secret_",
+  ];
 
   for (const file of files) {
     const content = readFileSync(file, "utf8");

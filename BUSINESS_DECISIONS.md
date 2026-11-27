@@ -5,11 +5,11 @@ as a final value. Grouped by what each one blocks.
 
 ## Blocking the next phase (M2: admin dashboard)
 
-| #   | Decision / input             | What I need                                                                                                                                                                                         | Where it goes           |
-| --- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 1   | **Supabase staging project** | Create a project (region close to Nigeria, e.g. `eu-west`/`af-south` if offered). Put its database URL, anon key and service-role key in your local `.env` yourself. Don't paste keys into chat.    | `.env` (see `SETUP.md`) |
-| 2   | **First super-admin**        | The email address of the first VARCH super admin (yourself?).                                                                                                                                       | Bootstrap script in M2  |
-| 3   | **Staff roles**              | Confirm the three staff roles (Super Admin, Operations, Finance) and the permission split in `src/lib/auth/permissions.ts`. In particular: may Operations see merchant bank details? (currently no) | `permissions.ts`        |
+| #   | Decision / input                  | What I need                                                                                                                                                                                         | Where it goes           |
+| --- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 1   | ~~**Supabase dev/test project**~~ | **Done (2026-11-27):** existing GitHub-linked project, migrated, locked down and seeded. Production project still to create before launch.                                                          | `.env` (see `SETUP.md`) |
+| 2   | **First super-admin**             | The email address of the first VARCH super admin (yourself?).                                                                                                                                       | Bootstrap script in M2  |
+| 3   | **Staff roles**                   | Confirm the three staff roles (Super Admin, Operations, Finance) and the permission split in `src/lib/auth/permissions.ts`. In particular: may Operations see merchant bank details? (currently no) | `permissions.ts`        |
 
 ## Commercial terms
 

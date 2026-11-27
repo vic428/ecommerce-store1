@@ -33,15 +33,12 @@ import { categories } from "../src/data/categories";
 import { merchants } from "../src/data/merchants";
 import { products } from "../src/data/products";
 import { toMinor } from "../src/lib/currency";
+import { pgPoolConfig } from "../src/lib/pg-config";
 
 const resetSettings = process.argv.includes("--reset-settings");
 const withDemo = !process.argv.includes("--no-demo");
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is not set.");
-const db = new PrismaClient({
-  adapter: new PrismaPg({ connectionString, max: Number(process.env.DATABASE_POOL_MAX) || undefined }),
-});
+const db = new PrismaClient({ adapter: new PrismaPg(pgPoolConfig()) });
 
 async function seedSettings() {
   const raw: Record<SettingKey, unknown> = {

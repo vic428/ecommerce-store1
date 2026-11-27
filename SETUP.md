@@ -5,26 +5,33 @@ secrets ever entering the repository or chat.
 
 ## Environments
 
-| Environment | App                       | Database / Auth / Storage                                                             | Data                   |
-| ----------- | ------------------------- | ------------------------------------------------------------------------------------- | ---------------------- |
-| Local       | `npm run dev`             | Local Postgres (`npm run db:dev`) now; staging Supabase once Supabase Auth lands (M2) | Demo seed              |
-| Staging     | Netlify site (staging)    | **Supabase staging project**                                                          | Demo or test data only |
-| Production  | Netlify site (production) | **Supabase production project**                                                       | Real data              |
+| Environment      | App                       | Database / Auth / Storage                                   | Data      |
+| ---------------- | ------------------------- | ----------------------------------------------------------- | --------- |
+| Local + dev/test | `npm run dev`             | **Supabase dev/test project** (the one linked to this repo) | Demo seed |
+| Production       | Netlify site (production) | **Supabase production project** (create closer to launch)   | Real data |
+| Offline (option) | `npm run dev`             | Prisma's local Postgres (`npm run db:dev`)                  | Demo seed |
 
-Staging and production never share keys. Each Netlify site has its own environment variables.
+Dev/test and production never share keys. Each Netlify site has its own environment variables.
+The free Supabase plan allows two projects, so no paid branching is needed.
 
 ## Local development
 
 ```bash
 npm install
-cp .env.example .env
-npm run db:dev            # starts Prisma's local Postgres; paste its URL into DATABASE_URL
-                          # and set DATABASE_POOL_MAX="1"
-npm run db:migrate        # apply migrations
-npm run db:check-rls      # verify RLS is on for every table
+cp .env.example .env      # fill in DATABASE_URL and the three SUPABASE_* values
+npm run db:deploy         # apply migrations to the Supabase dev/test project
+npm run db:check-rls      # verify RLS + no browser-role access
 npm run db:seed           # demo marketplace: 8 merchants, 8 categories, 26 products
 npm run dev               # http://localhost:3000
 ```
+
+Use `npm run db:deploy` (not `db:migrate`) against Supabase: `db:migrate` needs a throwaway shadow
+database and may offer to reset the database. Create new migrations against the offline local
+database (`npm run db:dev`, with `DATABASE_POOL_MAX="1"`), then deploy them to Supabase.
+
+**Latency:** every query is a round trip to Supabase's region. From a distant location expect
+0.4–2 s per round trip, so seeding takes minutes and cold pages are slow. Run migrations and
+long scripts in the background.
 
 Tests:
 
@@ -34,25 +41,34 @@ npx playwright install chromium   # first time only
 npm run test:e2e          # builds and starts the app, then runs desktop/tablet/mobile tests
 ```
 
-The local dev database handles about one connection at a time. If it stops responding
-(`ECONNREFUSED` or `P1017`), restart it with `npm run db:dev`.
+E2E tests write to the database (newsletter sign-ups), so point them at the dev/test project,
+never production.
 
-## Supabase projects (you create these)
+## Supabase projects
 
-For **each** of staging and production:
+For each project (dev/test now, production later):
 
-1. Create a Supabase project. Note its region.
-2. **Database → Connection string**: copy the _Session pooler_ URI (port 5432) for migrations
-   and the _Transaction pooler_ URI (port 6543) for the running app.
-3. **Project Settings → API**: note the project URL, the `anon` public key and the
-   `service_role` key. **The service-role key bypasses all security. It goes only in
-   server-side environment variables, never in `NEXT_PUBLIC_*` variables, code or chat.**
-4. **Authentication → URL configuration**: set the site URL and redirect URLs to the matching
+1. **Connect** dialog → connection string:
+   - **Direct** (`db.<ref>.supabase.co:5432`, user `postgres`): fine from a PC with IPv6.
+   - **Session pooler** (`aws-0-<region>.pooler.supabase.com:5432`, user `postgres.<ref>`):
+     works everywhere (IPv4). **Use this on Netlify.**
+   - Replace `[YOUR-PASSWORD]` (brackets included) with the database password. Letters and
+     digits only avoids URL-encoding problems.
+2. **Project Settings → API Keys**: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (public) and
+   `SUPABASE_SECRET_KEY`. **The secret key bypasses all security. It goes only in server-side
+   environment variables, never in `NEXT_PUBLIC_*` variables, code or chat.**
+3. **Project Settings → Database → SSL configuration**: download the CA certificate and set
+   `DATABASE_SSL_CA` (PEM text) so the app verifies the server, not just encrypts. **Required on
+   Netlify production deploys**: the app refuses to connect there without it. Elsewhere,
+   connections without it are encrypted but unverified (set `DATABASE_SSL_REQUIRE_CA="true"` to
+   enforce verification in any environment).
+4. **Integrations → GitHub**: leave automatic migration deploys off. This repo's migrations
+   are in `prisma/migrations`, applied deliberately with `npm run db:deploy`.
+5. **Authentication → URL configuration** (M2): site URL and redirect URLs for the matching
    Netlify domain.
-5. Apply migrations from your machine or CI: `DATABASE_URL=<session pooler URI> npm run db:deploy`,
-   then `npm run db:check-rls`.
-6. Seed only settings and categories: `npm run db:seed -- --no-demo`. Never load demo
-   merchants into production.
+6. Apply migrations: `npm run db:deploy`, then `npm run db:check-rls`.
+7. Production only: seed settings and categories with `npm run db:seed -- --no-demo`. Never load
+   demo merchants into production.
 
 ## Environment variables
 
@@ -60,12 +76,13 @@ See `.env.example` for the full list. Server-only unless prefixed `NEXT_PUBLIC_`
 
 | Variable                                       | Staging                        | Production             | Notes                                                              |
 | ---------------------------------------------- | ------------------------------ | ---------------------- | ------------------------------------------------------------------ |
-| `DATABASE_URL`                                 | staging pooler URI             | production pooler URI  | Secret                                                             |
-| `DATABASE_POOL_MAX`                            | unset                          | unset                  | Only `1` for the local dev DB                                      |
-| `NEXT_PUBLIC_SITE_URL`                         | staging URL                    | production URL         |                                                                    |
-| `NEXT_PUBLIC_SUPABASE_URL`                     | staging project URL            | production project URL | M2                                                                 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`                | staging anon key               | production anon key    | Public by design; RLS blocks table access                          |
-| `SUPABASE_SERVICE_ROLE_KEY`                    | staging                        | production             | **Secret, server only** (M2: Storage uploads, admin user creation) |
+| `DATABASE_URL`                                 | dev/test session pooler URI    | production pooler URI  | Secret                                                             |
+| `DATABASE_SSL_CA`                              | optional                       | recommended            | Supabase CA certificate (PEM)                                      |
+| `DATABASE_POOL_MAX`                            | unset                          | unset                  | Only `1` for the offline local DB                                  |
+| `NEXT_PUBLIC_SITE_URL`                         | dev/test URL                   | production URL         |                                                                    |
+| `SUPABASE_URL`                                 | dev/test project URL           | production project URL | M2                                                                 |
+| `SUPABASE_PUBLISHABLE_KEY`                     | dev/test publishable key       | production key         | Public by design; RLS blocks table access                          |
+| `SUPABASE_SECRET_KEY`                          | dev/test secret key            | production secret key  | **Secret, server only** (M2: Storage uploads, admin user creation) |
 | `PAYMENT_PROVIDER`                             | `mock` or provider (test keys) | provider (live keys)   | `mock` refused in production (M4)                                  |
 | `PAYMENT_SECRET_KEY`, `PAYMENT_WEBHOOK_SECRET` | provider test keys             | provider live keys     | **Secret**                                                         |
 | `EMAIL_*`                                      | test sender                    | verified domain        | M3/M4                                                              |
