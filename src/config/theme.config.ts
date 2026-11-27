@@ -1,5 +1,5 @@
 /**
- * Brand theme. ⚠ DEMO CONTENT — the yellow/black palette is the ShopEase demonstration theme.
+ * Brand theme. ⚠ DEMO CONTENT — the yellow/black palette is the demonstration theme carried over from the reference design (final branding pending).
  *
  * Colours become CSS variables in the root layout, so changing them here (or in
  * /admin/settings) re-themes the whole storefront without touching components.

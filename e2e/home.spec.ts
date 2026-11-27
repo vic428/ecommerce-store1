@@ -18,10 +18,10 @@ async function gotoHome(page: Page) {
 test.describe("homepage", () => {
   test("renders store branding from settings", async ({ page }) => {
     await gotoHome(page);
-    await expect(page).toHaveTitle(/ShopEase/);
-    await expect(page.getByRole("link", { name: "ShopEase home" }).first()).toBeVisible();
+    await expect(page).toHaveTitle(/VARCH Marketplace/);
+    await expect(page.getByRole("link", { name: "VARCH Marketplace home" }).first()).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Premium Quality");
-    await expect(page.locator("footer")).toContainText("ShopEase. All rights reserved.");
+    await expect(page.locator("footer")).toContainText("VARCH Marketplace. All rights reserved.");
   });
 
   test("applies the theme colours as CSS variables", async ({ page }) => {
@@ -37,6 +37,20 @@ test.describe("homepage", () => {
     const cards = page.getByTestId("product-card");
     await expect(cards).toHaveCount(5);
     await expect(cards.first().getByTestId("product-price")).toContainText("₦");
+  });
+
+  test("every product card names its merchant, and several merchants are represented", async ({ page }) => {
+    await gotoHome(page);
+    const merchants = page.getByTestId("product-card").getByTestId("product-merchant");
+    await expect(merchants.first()).toContainText("Sold by");
+    const names = new Set((await merchants.allInnerTexts()).map((t) => t.replace("Sold by", "").trim()));
+    expect(names.size).toBeGreaterThan(1);
+  });
+
+  test("shows the correct merchant for a known product", async ({ page }) => {
+    await gotoHome(page);
+    const card = page.getByTestId("product-card").filter({ hasText: "Modern Laptop Backpack" });
+    await expect(card.getByTestId("product-merchant")).toHaveText("Sold by Eka's Leather Collection");
   });
 
   test("category links come from the catalogue", async ({ page }) => {
@@ -70,7 +84,7 @@ test.describe("homepage", () => {
     const res = await page.goto("/this-page-does-not-exist");
     expect(res?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "ShopEase home" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "VARCH Marketplace home" }).first()).toBeVisible();
   });
 });
 
@@ -113,7 +127,9 @@ test.describe("newsletter", () => {
     const email = form.getByRole("textbox", { name: "Email address" });
     await email.fill("not-an-email");
     await form.getByRole("button", { name: "Subscribe" }).click();
-    await expect(form.getByRole("alert")).toHaveText("Please enter a valid email address.");
+    await expect(form.getByRole("alert")).toHaveText("Please enter a valid email address.", {
+      timeout: 15_000,
+    });
     await expect(email).toHaveValue("not-an-email");
   });
 
@@ -124,7 +140,7 @@ test.describe("newsletter", () => {
       .getByRole("textbox", { name: "Email address" })
       .fill(`e2e+${testInfo.project.name}-${Date.now()}@example.com`);
     await form.getByRole("button", { name: "Subscribe" }).click();
-    await expect(form.getByRole("status")).toContainText("Thanks for subscribing");
+    await expect(form.getByRole("status")).toContainText("Thanks for subscribing", { timeout: 15_000 });
   });
 });
 

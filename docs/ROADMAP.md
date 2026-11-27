@@ -1,15 +1,8 @@
-# Roadmap
+# Storefront notes (original template phases 0–1)
 
-| Phase | Scope                                                                                                                 | Status |
-| ----- | --------------------------------------------------------------------------------------------------------------------- | ------ |
-| 0     | Repo, tooling, database schema, settings schemas, demo config/data, seed, docs                                        | Done   |
-| 1     | Design system, theme from settings, layout (announcement, header, footer), homepage blocks                            | Done   |
-| 2     | Shop listing, search, filters, sort, pagination, product page, cart, wishlist                                         | Next   |
-| 3     | Checkout, server-side pricing and stock, payment provider interface + mock, customer auth                             | —      |
-| 4     | Admin: auth + roles, dashboard, products, categories, inventory, orders, customers, coupons, reviews, settings, users | —      |
-| 5     | Full Playwright suites, accessibility, performance                                                                    | —      |
-| 6     | CI pipeline, deployment guide                                                                                         | —      |
-| 7     | First client store                                                                                                    | —      |
+> The project pivoted to a multi-vendor marketplace. The current plan and phases (M1–M5) are in
+> [ARCHITECTURE_CHANGE.md](ARCHITECTURE_CHANGE.md). The notes below still describe how the
+> storefront shell works.
 
 ## Phase 1 notes
 

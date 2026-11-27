@@ -145,6 +145,32 @@ export const footerSchema = z.object({
   copyright: z.string().optional(),
 });
 
+const costBearer = z.enum(["VARCH", "MERCHANT"]);
+
+/**
+ * Marketplace commission settings. `default` applies to merchants without an ACTIVE agreement.
+ * It is null until VARCH decides the rate (see BUSINESS_DECISIONS.md); with no default and no
+ * agreement, a merchant's products can't be checked out.
+ */
+export const commissionSchema = z.object({
+  default: z
+    .object({
+      type: z.enum(["PERCENTAGE", "FIXED_PER_UNIT"]),
+      rateBps: z.number().int().min(0).max(10_000).nullable(),
+      fixedAmount: z.number().int().min(0).nullable(),
+      basis: z.enum(["GROSS_BEFORE_DISCOUNT", "NET_OF_DISCOUNT"]),
+      discountBearer: costBearer,
+      paymentFeeBearer: costBearer,
+    })
+    .refine((d) => (d.type === "PERCENTAGE" ? d.rateBps !== null : d.fixedAmount !== null), {
+      message: "Percentage needs rateBps; fixed needs fixedAmount",
+    })
+    .nullable()
+    .default(null),
+  /** MVP: one merchant per checkout. Multi-merchant carts are a later phase. */
+  checkoutMode: z.enum(["SINGLE_MERCHANT"]).default("SINGLE_MERCHANT"),
+});
+
 export const settingsSchemas = {
   business: businessSchema,
   branding: brandingSchema,
@@ -153,6 +179,7 @@ export const settingsSchemas = {
   navigation: navigationSchema,
   announcement: announcementSchema,
   footer: footerSchema,
+  commission: commissionSchema,
 } as const;
 
 export type SettingKey = keyof typeof settingsSchemas;
@@ -163,6 +190,7 @@ export type FeatureSettings = z.infer<typeof featuresSchema>;
 export type NavigationSettings = z.infer<typeof navigationSchema>;
 export type AnnouncementSettings = z.infer<typeof announcementSchema>;
 export type FooterSettings = z.infer<typeof footerSchema>;
+export type CommissionSettings = z.infer<typeof commissionSchema>;
 
 /** Input types: what a config file must provide (defaults fill the rest). */
 export type SettingsInput = { [K in SettingKey]: z.input<(typeof settingsSchemas)[K]> };

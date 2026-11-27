@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { db } from "./db";
 import { CacheTags } from "./cache-tags";
+import { LISTABLE_PRODUCT_STATUSES, SELLING_MERCHANT_STATUSES } from "./availability";
 import type { Prisma } from "@/generated/prisma/client";
 
 /** Everything a product card needs. Prices are minor units. */
@@ -21,6 +22,8 @@ export type ProductCardData = {
   /** Set when the product has exactly one active variant, so it can be added straight to the cart. */
   defaultVariantId: string | null;
   variantCount: number;
+  /** The merchant that sells and fulfils this product. */
+  merchant: { slug: string; name: string };
 };
 
 export type CategorySummary = {
@@ -41,6 +44,8 @@ const cardSelect = {
   compareAtPrice: true,
   ratingAvg: true,
   ratingCount: true,
+  status: true,
+  merchant: { select: { slug: true, businessName: true } },
   images: { orderBy: { position: "asc" }, take: 1, select: { url: true, alt: true } },
   variants: {
     where: { isActive: true },
@@ -52,7 +57,9 @@ const cardSelect = {
 type CardRow = Prisma.ProductGetPayload<{ select: typeof cardSelect }>;
 
 function toCard(p: CardRow): ProductCardData {
-  const stock = p.variants.reduce((sum, v) => sum + Math.max(0, v.stock), 0);
+  // A product marked OUT_OF_STOCK by staff shows as sold out whatever the variant counts say.
+  const stock =
+    p.status === "OUT_OF_STOCK" ? 0 : p.variants.reduce((sum, v) => sum + Math.max(0, v.stock), 0);
   // Show the lowest variant price ("from" price) when variants override the base price.
   const prices = p.variants.map((v) => v.price ?? p.price);
   const price = prices.length ? Math.min(...prices) : p.price;
@@ -71,12 +78,17 @@ function toCard(p: CardRow): ProductCardData {
     lowStock,
     defaultVariantId: p.variants.length === 1 ? p.variants[0].id : null,
     variantCount: p.variants.length,
+    merchant: { slug: p.merchant.slug, name: p.merchant.businessName },
   };
 }
 
-/** Only products that are ACTIVE and in an active (or no) category are public. */
+/**
+ * Public products: listable status, sold by a merchant allowed to sell, in an active (or no)
+ * category. Mirrors `isListed` in ./availability.
+ */
 const publicProduct: Prisma.ProductWhereInput = {
-  status: "ACTIVE",
+  status: { in: [...LISTABLE_PRODUCT_STATUSES] },
+  merchant: { status: { in: [...SELLING_MERCHANT_STATUSES] } },
   OR: [{ categoryId: null }, { category: { isActive: true } }],
 };
 

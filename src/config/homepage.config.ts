@@ -9,7 +9,7 @@ export const homepageConfig: HomepageBlockInput[] = [
   {
     type: "HERO",
     content: {
-      eyebrow: "Welcome to ShopEase",
+      eyebrow: "Welcome to VARCH Marketplace",
       headline: "Premium Quality",
       highlight: "Great Prices",
       description:

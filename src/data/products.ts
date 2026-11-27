@@ -1,8 +1,9 @@
 /**
- * ⚠ DEMO CONTENT — ShopEase demonstration catalogue. Replace for each client.
+ * ⚠ DEMO CONTENT — demonstration marketplace catalogue. Prices are not real merchant prices.
  *
- * Brand names are fictional. Image paths point at public/demo/products/; images are added
- * in Phase 1 (until then the storefront shows a placeholder).
+ * Brand and merchant names are fictional; every product belongs to a demo merchant in
+ * merchants.ts. Image paths point at public/demo/products/; until files are added the
+ * storefront shows a placeholder.
  * Prices are in major units (₦).
  */
 import type { SeedProduct } from "./types";
@@ -14,6 +15,7 @@ export const products: SeedProduct[] = [
   {
     slug: "smart-watch-series-10",
     name: "Smart Watch Series 10",
+    merchantSlug: "novatek-electronics",
     categorySlug: "electronics",
     brand: "Novatek",
     shortDescription: "Fitness tracking, heart-rate monitoring and 5-day battery.",
@@ -47,6 +49,7 @@ export const products: SeedProduct[] = [
   {
     slug: "wireless-earbuds-pro",
     name: "Wireless Earbuds Pro",
+    merchantSlug: "novatek-electronics",
     categorySlug: "electronics",
     brand: "Novatek",
     shortDescription: "Active noise cancellation with a wireless charging case.",
@@ -67,6 +70,7 @@ export const products: SeedProduct[] = [
   {
     slug: "over-ear-headphones",
     name: "Studio Over-Ear Headphones",
+    merchantSlug: "novatek-electronics",
     categorySlug: "electronics",
     brand: "Sonora",
     shortDescription: "Wireless over-ear headphones with 40-hour battery.",
@@ -79,7 +83,9 @@ export const products: SeedProduct[] = [
   },
   {
     slug: "smartphone-x5",
+    commissionRateBps: 800, // demo: product-level commission override
     name: "Smartphone X5 128GB",
+    merchantSlug: "novatek-electronics",
     categorySlug: "electronics",
     brand: "Novatek",
     shortDescription: '6.5" display, triple camera, 5,000 mAh battery.',
@@ -103,6 +109,7 @@ export const products: SeedProduct[] = [
   {
     slug: "portable-bluetooth-speaker",
     name: "Portable Bluetooth Speaker",
+    merchantSlug: "novatek-electronics",
     categorySlug: "electronics",
     brand: "Sonora",
     shortDescription: "Waterproof speaker with 12-hour playtime.",
@@ -118,6 +125,7 @@ export const products: SeedProduct[] = [
   {
     slug: "ultrabook-laptop-14",
     name: 'UltraBook Laptop 14"',
+    merchantSlug: "novatek-electronics",
     categorySlug: "computers",
     brand: "Corelite",
     shortDescription: "Thin and light, 16GB RAM, 512GB SSD.",
@@ -136,6 +144,7 @@ export const products: SeedProduct[] = [
   {
     slug: "wireless-mouse",
     name: "Ergonomic Wireless Mouse",
+    merchantSlug: "novatek-electronics",
     categorySlug: "computers",
     brand: "Corelite",
     price: 12_500,
@@ -148,6 +157,7 @@ export const products: SeedProduct[] = [
   {
     slug: "mechanical-keyboard",
     name: "Mechanical Keyboard TKL",
+    merchantSlug: "novatek-electronics",
     categorySlug: "computers",
     brand: "Corelite",
     price: 38_000,
@@ -160,7 +170,9 @@ export const products: SeedProduct[] = [
   },
   {
     slug: "usb-c-hub",
+    status: "ARCHIVED", // demo: archived products are never shown or sold
     name: "7-in-1 USB-C Hub",
+    merchantSlug: "novatek-electronics",
     categorySlug: "computers",
     price: 18_999,
     images: img("usb-c-hub", "Aluminium USB-C hub with multiple ports"),
@@ -174,7 +186,8 @@ export const products: SeedProduct[] = [
   {
     slug: "modern-laptop-backpack",
     name: "Modern Laptop Backpack",
-    categorySlug: "fashion",
+    merchantSlug: "ekas-leather-collection",
+    categorySlug: "bags-leather-goods",
     brand: "Urbanfold",
     shortDescription: 'Water-resistant backpack that fits 15.6" laptops.',
     price: 34_999,
@@ -189,6 +202,7 @@ export const products: SeedProduct[] = [
   {
     slug: "running-shoes",
     name: "Running Shoes",
+    merchantSlug: "stride-apparel",
     categorySlug: "fashion",
     brand: "Stride",
     shortDescription: "Breathable mesh upper with cushioned sole.",
@@ -208,8 +222,9 @@ export const products: SeedProduct[] = [
   },
   {
     slug: "leather-tote-bag",
-    name: "Leather Tote Bag",
-    categorySlug: "fashion",
+    name: "Handmade Leather Tote Bag",
+    merchantSlug: "ekas-leather-collection",
+    categorySlug: "bags-leather-goods",
     brand: "Urbanfold",
     price: 72_000,
     images: img("leather-tote-bag", "Tan leather tote bag"),
@@ -221,6 +236,7 @@ export const products: SeedProduct[] = [
   {
     slug: "white-leather-sneakers",
     name: "White Leather Sneakers",
+    merchantSlug: "stride-apparel",
     categorySlug: "fashion",
     brand: "Stride",
     price: 45_000,
@@ -237,6 +253,7 @@ export const products: SeedProduct[] = [
   {
     slug: "cotton-crew-tshirt",
     name: "Cotton Crew T-Shirt",
+    merchantSlug: "stride-apparel",
     categorySlug: "fashion",
     price: 9_500,
     images: img("cotton-crew-tshirt", "Folded plain cotton t-shirt"),
@@ -255,6 +272,7 @@ export const products: SeedProduct[] = [
   {
     slug: "ceramic-table-lamp",
     name: "Ceramic Table Lamp",
+    merchantSlug: "urban-nest-home",
     categorySlug: "home-living",
     price: 27_500,
     images: img("ceramic-table-lamp", "Ceramic table lamp with linen shade"),
@@ -266,6 +284,7 @@ export const products: SeedProduct[] = [
   {
     slug: "accent-armchair",
     name: "Accent Armchair",
+    merchantSlug: "urban-nest-home",
     categorySlug: "home-living",
     price: 185_000,
     compareAtPrice: 210_000,
@@ -278,6 +297,7 @@ export const products: SeedProduct[] = [
   {
     slug: "non-stick-cookware-set",
     name: "Non-Stick Cookware Set (8 pc)",
+    merchantSlug: "urban-nest-home",
     categorySlug: "home-living",
     price: 68_000,
     images: img("non-stick-cookware-set", "Set of black non-stick pots and pans"),
@@ -288,7 +308,9 @@ export const products: SeedProduct[] = [
   },
   {
     slug: "indoor-potted-plant",
+    status: "PENDING_REVIEW", // demo: awaiting VARCH review, not public
     name: "Indoor Potted Plant",
+    merchantSlug: "urban-nest-home",
     categorySlug: "home-living",
     price: 15_000,
     images: img("indoor-potted-plant", "Green leafy plant in a white pot"),
@@ -302,6 +324,7 @@ export const products: SeedProduct[] = [
   {
     slug: "hydrating-face-serum",
     name: "Hydrating Face Serum 30ml",
+    merchantSlug: "glowlab-naturals",
     categorySlug: "beauty",
     brand: "Glowlab",
     price: 14_500,
@@ -315,6 +338,7 @@ export const products: SeedProduct[] = [
   {
     slug: "daily-sunscreen-spf50",
     name: "Daily Sunscreen SPF 50",
+    merchantSlug: "glowlab-naturals",
     categorySlug: "beauty",
     brand: "Glowlab",
     price: 11_000,
@@ -327,6 +351,7 @@ export const products: SeedProduct[] = [
   {
     slug: "electric-shaver",
     name: "Rechargeable Electric Shaver",
+    merchantSlug: "glowlab-naturals",
     categorySlug: "beauty",
     price: 32_000,
     images: img("electric-shaver", "Black rechargeable electric shaver"),
@@ -340,6 +365,7 @@ export const products: SeedProduct[] = [
   {
     slug: "yoga-mat",
     name: "Non-Slip Yoga Mat",
+    merchantSlug: "fitlagos-sports",
     categorySlug: "sports-outdoors",
     price: 13_500,
     images: img("yoga-mat", "Rolled purple yoga mat"),
@@ -351,6 +377,7 @@ export const products: SeedProduct[] = [
   {
     slug: "adjustable-dumbbells",
     name: "Adjustable Dumbbells (2 × 10kg)",
+    merchantSlug: "fitlagos-sports",
     categorySlug: "sports-outdoors",
     price: 54_000,
     compareAtPrice: 62_000,
@@ -363,6 +390,7 @@ export const products: SeedProduct[] = [
   {
     slug: "insulated-water-bottle",
     name: "Insulated Water Bottle 1L",
+    merchantSlug: "fitlagos-sports",
     categorySlug: "sports-outdoors",
     price: 8_500,
     images: img("insulated-water-bottle", "Stainless steel insulated water bottle"),
@@ -376,6 +404,7 @@ export const products: SeedProduct[] = [
   {
     slug: "building-blocks-set",
     name: "Building Blocks Set (500 pc)",
+    merchantSlug: "little-stars-toys",
     categorySlug: "toys-games",
     price: 22_000,
     images: img("building-blocks-set", "Colourful plastic building blocks"),
@@ -387,6 +416,7 @@ export const products: SeedProduct[] = [
   {
     slug: "wireless-game-controller",
     name: "Wireless Game Controller",
+    merchantSlug: "little-stars-toys",
     categorySlug: "toys-games",
     price: 29_999,
     images: img("wireless-game-controller", "Black wireless game controller"),

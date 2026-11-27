@@ -17,7 +17,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
+    "db:check-rls": "tsx scripts/check-rls.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",

@@ -45,6 +45,9 @@ export function ProductCard({
         </div>
         <h3 className="text-text line-clamp-2 text-sm font-semibold">{product.name}</h3>
       </Link>
+      <p className="text-muted mt-0.5 truncate text-xs" data-testid="product-merchant">
+        Sold by <span className="text-text font-medium">{product.merchant.name}</span>
+      </p>
 
       {showRating && product.ratingCount > 0 && (
         <div className="mt-1.5">

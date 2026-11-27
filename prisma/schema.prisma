@@ -1,8 +1,12 @@
-// Database schema for one store deployment.
-// Each client deployment gets its own database; there is no tenant column.
+// VARCH marketplace database: ONE shared database for the whole marketplace.
+// Many merchants are represented as rows; every merchant-owned record references its merchant.
 //
-// Money is stored as integers in the currency's minor unit (kobo, cents, ...).
-// The currency itself lives in the "commerce" Setting and is snapshotted on each order.
+// Money:   integers in the currency's minor unit (kobo, cents). Never floats.
+// Rates:   integers in basis points (1 bp = 0.01%, so 1000 = 10.00%).
+// History: order items snapshot product, price, merchant and commission at the time of sale.
+// Deletes: financial and order relations use onDelete: Restrict. Merchants and products are
+//          archived/terminated, never deleted while history references them.
+// See DATABASE.md for relationships and the commission formulas.
 
 generator client {
   provider = "prisma-client"
@@ -14,11 +18,12 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Store configuration (runtime source of truth, seeded from src/config)
+// Marketplace configuration
 // ─────────────────────────────────────────────────────────────
 
-/// Key/value store settings. Keys: business, branding, commerce, features, navigation,
-/// announcement, footer. Values are validated with zod (src/lib/settings-schema.ts).
+/// Key/value marketplace settings (store_settings). Keys: business, branding, commerce,
+/// features, navigation, announcement, footer, commission. Validated with zod
+/// (src/lib/settings-schema.ts).
 model Setting {
   key       String   @id
   value     Json
@@ -63,9 +68,213 @@ model ShippingMethod {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Catalogue
+// Identity and access (Supabase Auth)
 // ─────────────────────────────────────────────────────────────
 
+/// App profile for a Supabase Auth user. `id` equals `auth.users.id`.
+model Profile {
+  id            String         @id @db.Uuid
+  email         String         @unique
+  fullName      String?
+  phone         String?
+  isActive      Boolean        @default(true)
+  roles         UserRole[]
+  merchantUsers MerchantUser[]
+  customer      Customer?
+  auditLogs     AuditLog[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  OPERATIONS
+  FINANCE
+  CUSTOMER
+}
+
+/// Platform roles granted to a profile. Staff roles are only granted by a SUPER_ADMIN.
+model UserRole {
+  profileId   String       @db.Uuid
+  profile     Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role        PlatformRole
+  grantedById String?      @db.Uuid
+  createdAt   DateTime     @default(now())
+
+  @@id([profileId, role])
+}
+
+enum MerchantUserRole {
+  OWNER
+  STAFF
+}
+
+/// Future merchant portal: links a login to exactly the merchants it may act for.
+model MerchantUser {
+  profileId  String           @db.Uuid
+  profile    Profile          @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  role       MerchantUserRole @default(STAFF)
+  isActive   Boolean          @default(true)
+  createdAt  DateTime         @default(now())
+
+  @@id([profileId, merchantId])
+  @@index([merchantId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Merchants
+// ─────────────────────────────────────────────────────────────
+
+enum MerchantStatus {
+  LEAD
+  ONBOARDING
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  TERMINATED
+}
+
+enum AgreementStatus {
+  NONE
+  DRAFT
+  SENT
+  SIGNED
+  EXPIRED
+  TERMINATED
+}
+
+enum ContactChannel {
+  EMAIL
+  PHONE
+  WHATSAPP
+  SMS
+}
+
+/// A business that supplies products to the marketplace. Merchants need no login account.
+model Merchant {
+  id                     String               @id @default(cuid())
+  slug                   String               @unique
+  businessName           String
+  /// Registered legal name, if different from the trading name.
+  legalName              String?
+  description            String?
+  logoUrl                String?
+  email                  String?
+  phone                  String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  state                  String?
+  country                String?
+  /// e.g. CAC RC/BN number. Only what VARCH is required to record.
+  registrationNumber     String?
+  registrationType       String?
+  preferredChannel       ContactChannel       @default(EMAIL)
+  status                 MerchantStatus       @default(LEAD)
+  agreementStatus        AgreementStatus      @default(NONE)
+  /// Settlement destination, stored minimally. Full account numbers belong with the payment
+  /// provider (subaccount/recipient), not in this database.
+  settlementBankName     String?
+  settlementAccountName  String?
+  settlementAccountLast4 String?
+  /// Provider-side subaccount / transfer-recipient code, when a provider is configured.
+  providerRecipientRef   String?
+  onboardedAt            DateTime?
+  terminatedAt           DateTime?
+  internalNotes          String?
+  contacts               MerchantContact[]
+  agreements             MerchantAgreement[]
+  products               Product[]
+  users                  MerchantUser[]
+  fulfilments            OrderFulfilment[]
+  orderItems             OrderItem[]
+  settlements            MerchantSettlement[]
+  campaigns              Campaign[]
+  coupons                Coupon[]
+  exports                MerchantExport[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@index([status])
+}
+
+model MerchantContact {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name       String
+  role       String?
+  email      String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([merchantId])
+}
+
+enum CommissionType {
+  /// rateBps of the commission basis.
+  PERCENTAGE
+  /// fixedAmount (minor units) per unit sold.
+  FIXED_PER_UNIT
+}
+
+enum CommissionBasis {
+  /// Unit price × quantity, before any discount.
+  GROSS_BEFORE_DISCOUNT
+  /// Unit price × quantity, minus the discount allocated to the line.
+  NET_OF_DISCOUNT
+}
+
+enum CostBearer {
+  VARCH
+  MERCHANT
+}
+
+enum AgreementRecordStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  TERMINATED
+}
+
+/// Commission agreement with a merchant. The ACTIVE agreement whose effective window contains
+/// the order date applies. Past orders keep their own snapshot regardless of later changes.
+model MerchantAgreement {
+  id               String                @id @default(cuid())
+  merchantId       String
+  merchant         Merchant              @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  status           AgreementRecordStatus @default(DRAFT)
+  commissionType   CommissionType        @default(PERCENTAGE)
+  rateBps          Int?
+  fixedAmount      Int?
+  commissionBasis  CommissionBasis       @default(NET_OF_DISCOUNT)
+  /// Who absorbs a discount on this merchant's items (affects merchant net).
+  discountBearer   CostBearer            @default(VARCH)
+  /// Who absorbs payment-processing fees allocated to this merchant's items.
+  paymentFeeBearer CostBearer            @default(VARCH)
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  signedAt         DateTime?
+  /// Pointer to the signed document (storage key or external reference).
+  documentRef      String?
+  notes            String?
+  orderItems       OrderItem[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([merchantId, status, effectiveFrom])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Catalogue (shared categories, merchant-owned products)
+// ─────────────────────────────────────────────────────────────
+
+/// Marketplace categories are controlled by VARCH only. Nested via parentId.
 model Category {
   id          String     @id @default(cuid())
   slug        String     @unique
@@ -77,51 +286,69 @@ model Category {
   position    Int        @default(0)
   isActive    Boolean    @default(true)
   parentId    String?
-  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children    Category[] @relation("CategoryTree")
   products    Product[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   @@index([isActive, position])
+  @@index([parentId])
 }
 
 enum ProductStatus {
   DRAFT
-  ACTIVE
+  PENDING_REVIEW
+  PUBLISHED
+  OUT_OF_STOCK
+  UNAVAILABLE
   ARCHIVED
+  REJECTED
 }
 
 model Product {
-  id               String           @id @default(cuid())
-  slug             String           @unique
-  name             String
-  shortDescription String?
-  description      String?
-  brand            String?
-  status           ProductStatus    @default(DRAFT)
-  isFeatured       Boolean          @default(false)
-  categoryId       String?
-  category         Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  id                    String           @id @default(cuid())
+  slug                  String           @unique
+  merchantId            String
+  merchant              Merchant         @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  categoryId            String?
+  category              Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name                  String
+  shortDescription      String?
+  description           String?
+  brand                 String?
+  status                ProductStatus    @default(DRAFT)
+  /// Reason shown to staff when status is REJECTED or UNAVAILABLE.
+  statusReason          String?
+  reviewedAt            DateTime?
+  reviewedById          String?          @db.Uuid
+  isFeatured            Boolean          @default(false)
   /// Base selling price; a variant may override it.
-  price            Int
+  price                 Int
   /// Original price shown struck through. Null = not on sale.
-  compareAtPrice   Int?
-  /// Free-form attributes shown on the product page (material, warranty, ...).
-  attributes       Json?
-  ratingAvg        Float            @default(0)
-  ratingCount      Int              @default(0)
-  salesCount       Int              @default(0)
-  images           ProductImage[]
-  variants         ProductVariant[]
-  reviews          Review[]
-  orderItems       OrderItem[]
-  wishlistItems    WishlistItem[]
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  compareAtPrice        Int?
+  /// Price the merchant quoted / agreed settlement basis, for reference. Not used in maths.
+  merchantQuotedPrice   Int?
+  /// Optional per-product commission override (takes precedence over the merchant agreement).
+  commissionType        CommissionType?
+  commissionRateBps     Int?
+  commissionFixedAmount Int?
+  /// Free-form attributes (material, size chart, warranty...). Category-agnostic.
+  attributes            Json?
+  ratingAvg             Float            @default(0)
+  ratingCount           Int              @default(0)
+  salesCount            Int              @default(0)
+  images                ProductImage[]
+  variants              ProductVariant[]
+  reviews               Review[]
+  orderItems            OrderItem[]
+  wishlistItems         WishlistItem[]
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   @@index([status, categoryId])
   @@index([status, isFeatured])
+  @@index([merchantId, status])
   @@index([createdAt])
 }
 
@@ -136,11 +363,11 @@ model ProductImage {
   @@index([productId, position])
 }
 
-/// Every product has at least one variant. Stock is tracked per variant.
+/// Every product has at least one variant. Stock (inventory) is tracked per variant.
 model ProductVariant {
   id                   String                @id @default(cuid())
   productId            String
-  product              Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product              Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
   sku                  String                @unique
   /// Display name, e.g. "Default", "Black / M".
   name                 String                @default("Default")
@@ -168,21 +395,22 @@ enum InventoryReason {
   CANCELLATION
   CORRECTION
   DAMAGE
+  MERCHANT_UPDATE
 }
 
+/// Inventory movements (ledger). `stockAfter` makes the history auditable.
 model InventoryAdjustment {
-  id          String          @id @default(cuid())
-  variantId   String
-  variant     ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  delta       Int
-  stockAfter  Int
-  reason      InventoryReason
-  note        String?
-  orderId     String?
-  order       Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  adminUserId String?
-  adminUser   AdminUser?      @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
-  createdAt   DateTime        @default(now())
+  id             String          @id @default(cuid())
+  variantId      String
+  variant        ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  delta          Int
+  stockAfter     Int
+  reason         InventoryReason
+  note           String?
+  orderId        String?
+  order          Order?          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actorProfileId String?         @db.Uuid
+  createdAt      DateTime        @default(now())
 
   @@index([variantId, createdAt])
 }
@@ -194,44 +422,47 @@ enum ReviewStatus {
 }
 
 model Review {
-  id         String       @id @default(cuid())
-  productId  String
-  product    Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  customerId String?
-  customer   Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  authorName String
-  rating     Int
-  title      String?
-  body       String?
-  status     ReviewStatus @default(PENDING)
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// Order item that proves purchase, when available.
+  orderItemId String?
+  authorName  String
+  rating      Int
+  title       String?
+  body        String?
+  status      ReviewStatus @default(PENDING)
+  moderatedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   @@index([productId, status])
 }
 
 // ─────────────────────────────────────────────────────────────
-// Customers (storefront accounts)
+// Customers
 // ─────────────────────────────────────────────────────────────
 
+/// A shopper. Guests have no profile; registered customers link to their Supabase profile.
 model Customer {
-  id              String               @id @default(cuid())
-  email           String               @unique
-  /// argon2id hash. Null for guest customers created at checkout.
-  passwordHash    String?
-  firstName       String?
-  lastName        String?
-  phone           String?
-  emailVerifiedAt DateTime?
-  isActive        Boolean              @default(true)
-  addresses       Address[]
-  orders          Order[]
-  reviews         Review[]
-  wishlistItems   WishlistItem[]
-  sessions        CustomerSession[]
-  resetTokens     PasswordResetToken[]
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  id            String         @id @default(cuid())
+  profileId     String?        @unique @db.Uuid
+  profile       Profile?       @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  email         String         @unique
+  firstName     String?
+  lastName      String?
+  phone         String?
+  isActive      Boolean        @default(true)
+  /// Set when personal data has been anonymised under the retention policy.
+  anonymisedAt  DateTime?
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 }
 
 model Address {
@@ -254,29 +485,6 @@ model Address {
   @@index([customerId])
 }
 
-/// Session row keyed by a SHA-256 hash of the cookie token; the raw token never touches the DB.
-model CustomerSession {
-  id         String   @id
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
-
-  @@index([customerId])
-}
-
-/// Keyed by a SHA-256 hash of the emailed token.
-model PasswordResetToken {
-  id         String    @id
-  customerId String
-  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime  @default(now())
-
-  @@index([customerId])
-}
-
 model WishlistItem {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -294,112 +502,59 @@ model NewsletterSubscriber {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Orders, payments, coupons
+// Marketing attribution
 // ─────────────────────────────────────────────────────────────
 
-enum PaymentStatus {
-  UNPAID
-  PENDING
-  PAID
-  FAILED
-  REFUNDED
-  PARTIALLY_REFUNDED
+enum CampaignChannel {
+  VARCH_SOCIAL
+  MERCHANT_SOCIAL
+  INFLUENCER
+  DIRECT
+  EMAIL
+  PAID_ADS
+  OTHER
 }
 
-enum FulfillmentStatus {
-  UNFULFILLED
-  PROCESSING
-  SHIPPED
-  DELIVERED
-  CANCELLED
-  RETURNED
+model Campaign {
+  id         String           @id @default(cuid())
+  /// Used in links as ?cmp=<code>.
+  code       String           @unique
+  name       String
+  channel    CampaignChannel
+  merchantId String?
+  merchant   Merchant?        @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  startsAt   DateTime?
+  endsAt     DateTime?
+  notes      String?
+  isActive   Boolean          @default(true)
+  referrals  ReferralSource[]
+  orders     Order[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 }
 
-model Order {
-  id                   String                @id @default(cuid())
-  /// Human-facing order number, e.g. "SE-100042".
-  number               String                @unique
-  customerId           String?
-  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  email                String
-  phone                String?
-  customerName         String
-  /// Snapshot of the delivery address at the time of order.
-  shippingAddress      Json
-  shippingMethodCode   String
-  shippingMethodName   String
-  currency             String
-  subtotal             Int
-  discountTotal        Int                   @default(0)
-  shippingTotal        Int                   @default(0)
-  taxTotal             Int                   @default(0)
-  total                Int
-  couponId             String?
-  coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: SetNull)
-  couponCode           String?
-  paymentStatus        PaymentStatus         @default(UNPAID)
-  fulfillmentStatus    FulfillmentStatus     @default(UNFULFILLED)
-  notes                String?
-  items                OrderItem[]
-  payments             Payment[]
-  events               OrderEvent[]
-  inventoryAdjustments InventoryAdjustment[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-
-  @@index([customerId])
-  @@index([createdAt])
-  @@index([paymentStatus, fulfillmentStatus])
+enum ReferralType {
+  INFLUENCER
+  CREATOR
+  MERCHANT
+  PARTNER
+  CUSTOMER
+  OTHER
 }
 
-/// Line items snapshot product data so later catalogue edits never change past orders.
-model OrderItem {
-  id          String          @id @default(cuid())
-  orderId     String
-  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId   String?
-  product     Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
-  variantId   String?
-  variant     ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  name        String
-  variantName String?
-  sku         String
-  imageUrl    String?
-  unitPrice   Int
-  quantity    Int
-  lineTotal   Int
-
-  @@index([orderId])
-}
-
-model OrderEvent {
-  id        String   @id @default(cuid())
-  orderId   String
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  type      String
-  message   String
-  /// "system", "customer", or an admin user id.
-  actor     String   @default("system")
-  createdAt DateTime @default(now())
-
-  @@index([orderId, createdAt])
-}
-
-model Payment {
-  id          String        @id @default(cuid())
-  orderId     String
-  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  /// Provider key, e.g. "mock", "paystack", "stripe".
-  provider    String
-  providerRef String?
-  amount      Int
-  currency    String
-  status      PaymentStatus @default(PENDING)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  @@unique([provider, providerRef])
-  @@index([orderId])
+/// A person or partner who refers traffic, identified in links as ?ref=<code>.
+model ReferralSource {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  name       String
+  type       ReferralType
+  contact    String?
+  campaignId String?
+  campaign   Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  isActive   Boolean      @default(true)
+  orders     Order[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 }
 
 enum CouponType {
@@ -413,7 +568,7 @@ model Coupon {
   code        String     @unique
   description String?
   type        CouponType
-  /// Percent (0-100) for PERCENT, minor units for FIXED, ignored for FREE_SHIPPING.
+  /// Percent in basis points for PERCENT (1000 = 10%), minor units for FIXED.
   value       Int        @default(0)
   minSubtotal Int?
   maxUses     Int?
@@ -421,58 +576,430 @@ model Coupon {
   startsAt    DateTime?
   endsAt      DateTime?
   isActive    Boolean    @default(true)
+  /// Restrict to one merchant's products. Null = marketplace-wide.
+  merchantId  String?
+  merchant    Merchant?  @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  /// Who funds the discount. Overrides the agreement's discountBearer for this coupon.
+  fundedBy    CostBearer @default(VARCH)
   orders      Order[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 }
 
 // ─────────────────────────────────────────────────────────────
-// Admin
+// Orders
 // ─────────────────────────────────────────────────────────────
 
-enum AdminRole {
-  OWNER
-  MANAGER
-  STAFF
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  AWAITING_MERCHANT_CONFIRMATION
+  CONFIRMED
+  PROCESSING
+  READY_FOR_DISPATCH
+  DISPATCHED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUND_REQUESTED
+  PARTIALLY_REFUNDED
+  REFUNDED
 }
 
-model AdminUser {
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+/// One customer-facing order. Items are grouped by merchant into OrderFulfilment rows.
+model Order {
   id                   String                @id @default(cuid())
-  email                String                @unique
-  name                 String
-  /// argon2id hash.
-  passwordHash         String
-  role                 AdminRole             @default(STAFF)
-  isActive             Boolean               @default(true)
-  lastLoginAt          DateTime?
-  sessions             AdminSession[]
-  auditLogs            AuditLog[]
+  /// Human-facing order reference, e.g. "VM-100042".
+  number               String                @unique
+  customerId           String?
+  customer             Customer?             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  email                String
+  phone                String?
+  customerName         String
+  /// Snapshot of the delivery address at the time of order.
+  shippingAddress      Json
+  shippingMethodCode   String
+  shippingMethodName   String
+  currency             String
+  /// Sum of line gross amounts (unit price × quantity).
+  subtotal             Int
+  discountTotal        Int                   @default(0)
+  shippingTotal        Int                   @default(0)
+  taxTotal             Int                   @default(0)
+  /// Amount the customer pays: subtotal − discount + shipping + tax.
+  total                Int
+  refundedTotal        Int                   @default(0)
+  status               OrderStatus           @default(PENDING_PAYMENT)
+  paymentStatus        PaymentStatus         @default(UNPAID)
+  couponId             String?
+  coupon               Coupon?               @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  couponCode           String?
+  /// Attribution
+  campaignId           String?
+  campaign             Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  referralSourceId     String?
+  referralSource       ReferralSource?       @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  notes                String?
+  cancelledAt          DateTime?
+  cancelReason         String?
+  completedAt          DateTime?
+  fulfilments          OrderFulfilment[]
+  items                OrderItem[]
+  payments             Payment[]
+  refunds              Refund[]
+  events               OrderEvent[]
   inventoryAdjustments InventoryAdjustment[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([paymentStatus])
 }
 
-/// Keyed by a SHA-256 hash of the cookie token.
-model AdminSession {
-  id          String    @id
-  adminUserId String
-  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
-  expiresAt   DateTime
-  createdAt   DateTime  @default(now())
-
-  @@index([adminUserId])
+enum FulfilmentStatus {
+  AWAITING_MERCHANT_CONFIRMATION
+  CONFIRMED
+  UNAVAILABLE
+  PROCESSING
+  READY_FOR_DISPATCH
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+  RETURNED
 }
 
+/// The part of an order one merchant must fulfil. MVP checkout creates exactly one per order.
+model OrderFulfilment {
+  id                  String           @id @default(cuid())
+  orderId             String
+  order               Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  merchantId          String
+  merchant            Merchant         @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  status              FulfilmentStatus @default(AWAITING_MERCHANT_CONFIRMATION)
+  merchantNotifiedAt  DateTime?
+  merchantConfirmedAt DateTime?
+  /// How the merchant confirmed (phone, WhatsApp, email…) and by whom, for the record.
+  confirmationNote    String?
+  carrier             String?
+  trackingNumber      String?
+  trackingUrl         String?
+  dispatchedAt        DateTime?
+  deliveredAt         DateTime?
+  items               OrderItem[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@unique([orderId, merchantId])
+  @@index([merchantId, status])
+}
+
+enum CommissionSource {
+  PRODUCT_OVERRIDE
+  MERCHANT_AGREEMENT
+  MARKETPLACE_DEFAULT
+}
+
+enum SettlementItemStatus {
+  /// Not yet payable (order not completed, or within the refund window).
+  NOT_DUE
+  /// Payable and not yet in a settlement.
+  PAYABLE
+  /// Included in a draft/approved settlement.
+  IN_SETTLEMENT
+  /// The settlement it belongs to has been marked paid.
+  SETTLED
+  /// Held back (dispute, investigation).
+  ON_HOLD
+  /// Cancelled/fully refunded; nothing payable.
+  VOID
+}
+
+/// Line item with full historical snapshot: product, merchant and commission as they were at
+/// the time of sale. These values are never recalculated from current catalogue/agreement data.
+model OrderItem {
+  id                    String               @id @default(cuid())
+  orderId               String
+  order                 Order                @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  fulfilmentId          String
+  fulfilment            OrderFulfilment      @relation(fields: [fulfilmentId], references: [id], onDelete: Restrict)
+  merchantId            String
+  merchant              Merchant             @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  merchantName          String
+  productId             String?
+  product               Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId             String?
+  variant               ProductVariant?      @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  name                  String
+  variantName           String?
+  sku                   String
+  imageUrl              String?
+  unitPrice             Int
+  quantity              Int
+  /// unitPrice × quantity.
+  grossAmount           Int
+  /// Discount allocated to this line.
+  discountAmount        Int                  @default(0)
+  // ── Commission snapshot ──
+  commissionSource      CommissionSource
+  agreementId           String?
+  agreement             MerchantAgreement?   @relation(fields: [agreementId], references: [id], onDelete: Restrict)
+  commissionType        CommissionType
+  commissionRateBps     Int?
+  commissionFixedAmount Int?
+  commissionBasis       CommissionBasis
+  discountBearer        CostBearer
+  paymentFeeBearer      CostBearer
+  /// Amount the commission is calculated on.
+  commissionBaseAmount  Int
+  commissionAmount      Int
+  /// Payment fee allocated to this line (known after payment verification).
+  paymentFeeAmount      Int                  @default(0)
+  /// What VARCH owes the merchant for this line before refunds.
+  merchantNetAmount     Int
+  // ── Refund running totals (detail in RefundItem) ──
+  refundedQuantity      Int                  @default(0)
+  refundedAmount        Int                  @default(0)
+  commissionReversed    Int                  @default(0)
+  merchantNetReversed   Int                  @default(0)
+  settlementStatus      SettlementItemStatus @default(NOT_DUE)
+  refundItems           RefundItem[]
+  settlementItems       SettlementItem[]
+
+  @@index([orderId])
+  @@index([merchantId, settlementStatus])
+  @@index([fulfilmentId])
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  type      String
+  message   String
+  /// "system", "customer", "webhook", or a staff profile id.
+  actor     String   @default("system")
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Payments and refunds
+// ─────────────────────────────────────────────────────────────
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  /// Provider key, e.g. "mock", "paystack", "flutterwave".
+  provider    String
+  /// Reference we generate and send to the provider. Unique so retries can't double-create.
+  reference   String        @unique
+  /// Provider's own transaction id, once known.
+  providerRef String?
+  amount      Int
+  currency    String
+  status      PaymentStatus @default(PENDING)
+  /// Processing fee reported by the provider after verification.
+  feeAmount   Int?
+  verifiedAt  DateTime?
+  refunds     Refund[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([provider, providerRef])
+  @@index([orderId])
+}
+
+/// Every webhook/verification event received, keyed by the provider's event id. The unique key
+/// makes processing idempotent: a duplicate delivery is recorded once and ignored.
+model PaymentEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String
+  type        String
+  reference   String?
+  payload     Json
+  signatureOk Boolean
+  processedAt DateTime?
+  error       String?
+  receivedAt  DateTime  @default(now())
+
+  @@unique([provider, eventId])
+  @@index([reference])
+}
+
+enum RefundStatus {
+  REQUESTED
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
+model Refund {
+  id            String       @id @default(cuid())
+  orderId       String
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  paymentId     String?
+  payment       Payment?     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  amount        Int
+  reason        String
+  status        RefundStatus @default(REQUESTED)
+  providerRef   String?
+  requestedById String?      @db.Uuid
+  approvedById  String?      @db.Uuid
+  completedAt   DateTime?
+  items         RefundItem[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orderId])
+}
+
+/// How a refund affects one order item: amount returned to the customer and the matching
+/// reversal of VARCH commission and merchant net.
+model RefundItem {
+  id                  String           @id @default(cuid())
+  refundId            String
+  refund              Refund           @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  orderItemId         String
+  orderItem           OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  quantity            Int
+  amount              Int
+  commissionReversed  Int
+  merchantNetReversed Int
+  settlementItems     SettlementItem[]
+
+  @@index([orderItemId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Merchant settlements (manually reconciled)
+// ─────────────────────────────────────────────────────────────
+
+enum SettlementStatus {
+  DRAFT
+  APPROVED
+  /// VARCH recorded that it sent the transfer (with reference). Not proof the bank completed it.
+  MARKED_PAID
+  CANCELLED
+}
+
+model MerchantSettlement {
+  id               String           @id @default(cuid())
+  /// Statement number, e.g. "ST-2026-0001".
+  reference        String           @unique
+  merchantId       String
+  merchant         Merchant         @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  periodStart      DateTime
+  periodEnd        DateTime
+  currency         String
+  status           SettlementStatus @default(DRAFT)
+  grossAmount      Int
+  discountAmount   Int
+  refundAmount     Int
+  commissionAmount Int
+  paymentFeeAmount Int
+  adjustmentAmount Int              @default(0)
+  /// Amount payable to the merchant for this statement.
+  netPayable       Int
+  /// What VARCH recorded as paid, and the bank/provider reference it supplied.
+  paidAmount       Int?
+  paymentReference String?
+  paidAt           DateTime?
+  approvedById     String?          @db.Uuid
+  markedPaidById   String?          @db.Uuid
+  notes            String?
+  items            SettlementItem[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([merchantId, status])
+}
+
+enum SettlementItemType {
+  SALE
+  REFUND
+  ADJUSTMENT
+}
+
+/// One line on a settlement statement, traceable to the order item or refund it came from.
+model SettlementItem {
+  id               String             @id @default(cuid())
+  settlementId     String
+  settlement       MerchantSettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  type             SettlementItemType
+  /// SALE lines: each order item can be settled once.
+  orderItemId      String?            @unique
+  orderItem        OrderItem?         @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  /// REFUND lines: each refund item can be deducted once.
+  refundItemId     String?            @unique
+  refundItem       RefundItem?        @relation(fields: [refundItemId], references: [id], onDelete: Restrict)
+  description      String
+  /// Signed: positive for sales/credits, negative for refunds/deductions.
+  merchantAmount   Int
+  commissionAmount Int                @default(0)
+  createdAt        DateTime           @default(now())
+
+  @@index([settlementId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Offboarding and audit
+// ─────────────────────────────────────────────────────────────
+
+enum ExportStatus {
+  REQUESTED
+  READY
+  EXPIRED
+  FAILED
+}
+
+model MerchantExport {
+  id            String       @id @default(cuid())
+  merchantId    String
+  merchant      Merchant     @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  status        ExportStatus @default(REQUESTED)
+  /// Storage keys of the generated CSVs and image ZIP.
+  files         Json?
+  expiresAt     DateTime?
+  requestedById String?      @db.Uuid
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([merchantId])
+}
+
+/// Append-only log of staff and financial actions (admin_activity_logs).
 model AuditLog {
-  id          String     @id @default(cuid())
-  adminUserId String?
-  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
-  action      String
-  entity      String
-  entityId    String?
-  data        Json?
-  createdAt   DateTime   @default(now())
+  id             String   @id @default(cuid())
+  actorProfileId String?  @db.Uuid
+  actor          Profile? @relation(fields: [actorProfileId], references: [id], onDelete: SetNull)
+  action         String
+  entity         String
+  entityId       String?
+  /// Merchant the action concerns, for merchant activity feeds and scoped review.
+  merchantId     String?
+  data           Json?
+  createdAt      DateTime @default(now())
 
   @@index([entity, entityId])
+  @@index([merchantId, createdAt])
   @@index([createdAt])
 }

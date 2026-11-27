@@ -1,6 +1,6 @@
 /**
- * ⚠ DEMO CONTENT — ShopEase demonstration categories. Replace for each client.
- * Order here is the display order.
+ * ⚠ DEMO CONTENT — shared marketplace categories, controlled by VARCH (merchants can't create
+ * top-level categories). Order here is the display order. `parentSlug` nests a category.
  */
 import type { SeedCategory } from "./types";
 
@@ -13,6 +13,12 @@ export const categories: SeedCategory[] = [
   },
   { slug: "computers", name: "Computers", icon: "laptop", description: "Laptops and accessories" },
   { slug: "fashion", name: "Fashion", icon: "shirt", description: "Clothing, shoes and bags" },
+  {
+    slug: "bags-leather-goods",
+    name: "Bags & Leather Goods",
+    parentSlug: "fashion",
+    description: "Handbags, totes and backpacks",
+  },
   { slug: "home-living", name: "Home & Living", icon: "home", description: "Furniture, decor and kitchen" },
   { slug: "beauty", name: "Beauty & Personal Care", icon: "sparkles", description: "Skincare and grooming" },
   {

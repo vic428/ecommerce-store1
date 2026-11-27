@@ -1,23 +1,24 @@
 /**
- * Store identity and commerce settings.
+ * Marketplace identity and commerce settings.
  *
- * ⚠ DEMO CONTENT — "ShopEase" is the demonstration store. Replace every value in this file
- * when onboarding a client (see docs/ONBOARDING.md).
+ * ⚠ PLACEHOLDERS — the final brand name, tagline, contact details, delivery fees and commission
+ * default are business decisions (see BUSINESS_DECISIONS.md). Values marked PLACEHOLDER/DEMO
+ * must be replaced before launch.
  *
- * These values seed the database (`npm run db:seed`). Once a store is live, its staff edit
- * them in /admin/settings and the database copy wins.
+ * These values seed the database (`npm run db:seed`). Once live, staff edit them in /admin and
+ * the database copy wins.
  */
 import type { SettingsInput } from "@/lib/settings-schema";
 
 export const businessConfig: SettingsInput["business"] = {
-  name: "ShopEase",
-  tagline: "Shop Smarter. Live Better.",
+  name: "VARCH Marketplace", // PLACEHOLDER brand name
+  tagline: "Independent businesses. One marketplace.", // PLACEHOLDER
   description:
-    "ShopEase brings you quality products across electronics, fashion, home and more — at prices that make sense.",
-  logoText: "ShopEase",
-  email: "support@shopease.example",
-  phone: "+234 800 000 0000",
-  address: "12 Demo Street, Lagos, Nigeria",
+    "Products from independent businesses, curated and delivered by VARCH Enterprises. (Placeholder copy.)",
+  logoText: "VARCH",
+  email: "support@varch.example", // PLACEHOLDER
+  phone: "+234 000 000 0000", // PLACEHOLDER
+  address: "Lagos, Nigeria (placeholder address)",
   social: [
     { platform: "facebook", url: "https://facebook.com/" },
     { platform: "x", url: "https://x.com/" },
@@ -34,8 +35,24 @@ export const commerceConfig: SettingsInput["commerce"] = {
   pricesIncludeTax: true,
   taxRatePercent: 0,
   paymentMethods: ["mock"],
-  orderNumberPrefix: "SE",
+  orderNumberPrefix: "VM",
   lowStockThreshold: 5,
+};
+
+/**
+ * ⚠ DEMO VALUE — 10% marketplace default so the demo can price orders. The real default (or
+ * none) is a business decision. Set `default: null` to require an agreement for every merchant.
+ */
+export const commissionConfig: SettingsInput["commission"] = {
+  default: {
+    type: "PERCENTAGE",
+    rateBps: 1000,
+    fixedAmount: null,
+    basis: "NET_OF_DISCOUNT",
+    discountBearer: "VARCH",
+    paymentFeeBearer: "VARCH",
+  },
+  checkoutMode: "SINGLE_MERCHANT",
 };
 
 export const featuresConfig: SettingsInput["features"] = {
@@ -65,7 +82,10 @@ export const footerConfig: SettingsInput["footer"] = {
   paymentMarks: ["visa", "mastercard", "verve"],
 };
 
-/** Delivery options offered at checkout. Prices are in minor units (kobo). */
+/**
+ * Delivery options offered at checkout. Prices are in minor units (kobo).
+ * ⚠ DEMO VALUES — real delivery fees, thresholds and arrangements are a business decision.
+ */
 export const shippingMethodsConfig = [
   {
     code: "standard",
