@@ -76,11 +76,13 @@ test.describe("signed-in staff", () => {
   test("a super admin sees the dashboard with real figures, then signs out", async ({ page }) => {
     await signIn(page, admin.email!, admin.password!);
     await expect(page).toHaveURL(/\/admin$/, { timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();
+    // The dashboard runs ~11 queries against the remote database; allow for latency.
+    await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("admin-user-email")).toContainText(/E2E Admin|e2e-admin/);
-    // Demo seed: 6 active merchants (of 8), 22 published products from active merchants.
+    // Demo seed: 6 active merchants, 22 published products from active merchants. The total on
+    // record grows because the merchant tests add (and terminate) a merchant each run.
     await expect(page.getByTestId("stat-merchants")).toContainText("6");
-    await expect(page.getByTestId("stat-merchants")).toContainText("8 on record");
+    await expect(page.getByTestId("stat-merchants")).toContainText(/\d+ on record/);
     await expect(page.getByTestId("stat-products")).toContainText("22");
     await expect(page.getByTestId("recent-activity")).toContainText("auth sign in");
 

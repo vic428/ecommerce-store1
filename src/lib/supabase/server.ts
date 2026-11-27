@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabasePublicConfig } from "./config";
 
@@ -10,6 +11,9 @@ import { supabasePublicConfig } from "./config";
  */
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
+  // Supabase reads the clock while loading the session. Mark this as request-time work so Next
+  // never tries to prerender past it (Cache Components rejects Date.now() during prerendering).
+  await connection();
   const { url, key } = supabasePublicConfig();
   return createServerClient(url, key, {
     cookies: {

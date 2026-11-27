@@ -7,7 +7,12 @@ Status (on `main`):
   - Slice 1 done: staff sign-in (Supabase Auth, server actions), set/reset password by email,
     session refresh (`src/proxy.ts`), role-gated admin shell, real-data dashboard, audit log of
     sign-ins/outs and password changes, `npm run staff:create`.
-  - Next: merchants (slice 2), then products, categories and inventory (slice 3).
+  - Slice 2 done: merchants. Searchable/filterable list; create/edit with server validation;
+    contacts; commission agreements (draft → activate → terminate, scheduled switch-overs,
+    active terms immutable); status changes with confirmation (non-active hides listings
+    immediately, terminated is final, terminating needs `merchants:offboard`); settlement
+    details for Finance/Super Admin only; per-merchant activity log.
+  - Next: products, categories and inventory (slice 3).
 
 ## 1. What existed before the pivot
 

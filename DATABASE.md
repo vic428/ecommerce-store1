@@ -78,6 +78,19 @@ SettlementItem ─0..1 RefundItem  (REFUND line, unique: a refund is deducted on
 
 ## Commission calculation (`src/lib/commission.ts`)
 
+### Agreement lifecycle (`src/lib/merchants/rules.ts`)
+
+- New agreements start as **DRAFT** (editable by deleting and re-creating) or are activated
+  immediately. Activating sets status **ACTIVE**; its terms are then never edited. To change
+  terms, add a new agreement.
+- Activating an agreement starting on date D gives every ACTIVE agreement still running at D an
+  `effectiveTo` of D, so exactly one is in force at a time and the old one applies until the
+  switch-over. An ACTIVE agreement that starts on/after D is a conflict (terminate it first).
+- **Terminate** sets status TERMINATED and caps `effectiveTo` at now. Draft agreements can be
+  discarded. Past windows are never rewritten, and orders keep their commission snapshot either
+  way.
+- Only `agreements:write` (Super Admin) can create, activate or end agreements.
+
 ### Which rule applies (resolved when the order is created)
 
 1. **Product override**: `Product.commissionType` set.

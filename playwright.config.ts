@@ -15,6 +15,9 @@ const useDevServer = process.env.E2E_DEV === "1";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // The dev/test database is remote (Supabase, eu-west-1): first loads after a cache refresh can
+  // take well over the default 30s from here.
+  timeout: 60_000,
   // Prisma's local dev database handles about one connection at a time, so keep local runs
   // serial-ish. CI should use a real Postgres service and can raise this.
   workers: process.env.CI ? 2 : 1,

@@ -12,7 +12,7 @@ export type AdminNavItem = {
 /** Admin sidebar. Items are filtered by the signed-in user's permissions on the server. */
 export const adminNav: AdminNavItem[] = [
   { label: "Dashboard", href: "/admin", icon: "dashboard", permission: "admin:access", ready: true },
-  { label: "Merchants", href: "/admin/merchants", icon: "store", permission: "merchants:read", ready: false },
+  { label: "Merchants", href: "/admin/merchants", icon: "store", permission: "merchants:read", ready: true },
   { label: "Products", href: "/admin/products", icon: "package", permission: "products:read", ready: false },
   {
     label: "Categories",
