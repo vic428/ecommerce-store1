@@ -1,26 +1,75 @@
 @import "tailwindcss";
 
+/*
+ * Brand tokens. Real values are injected per store in the root layout from the
+ * "branding" setting (see src/lib/theme.ts); these are only fallbacks.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --brand-primary: #ffc400;
+  --brand-primary-fg: #17191c;
+  --brand-secondary: #17191c;
+  --brand-secondary-fg: #ffffff;
+  --brand-background: #ffffff;
+  --brand-surface: #f3f4f6;
+  --brand-text: #202124;
+  --brand-muted: #6b7280;
+  --brand-border: #e5e7eb;
+  --brand-success: #15803d;
+  --brand-danger: #dc2626;
+  --brand-radius: 4px;
+  --brand-font-heading: ui-sans-serif, system-ui, sans-serif;
+  --brand-font-body: ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary: var(--brand-primary);
+  --color-primary-fg: var(--brand-primary-fg);
+  --color-secondary: var(--brand-secondary);
+  --color-secondary-fg: var(--brand-secondary-fg);
+  --color-background: var(--brand-background);
+  --color-surface: var(--brand-surface);
+  --color-text: var(--brand-text);
+  --color-muted: var(--brand-muted);
+  --color-border: var(--brand-border);
+  --color-success: var(--brand-success);
+  --color-danger: var(--brand-danger);
+  --radius-brand: var(--brand-radius);
+  --font-heading: var(--brand-font-heading);
+  --font-sans: var(--brand-font-body);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Keep anchor targets (e.g. "Skip to content") clear of the sticky header. */
+html {
+  scroll-padding-top: 9.5rem;
+}
+@media (min-width: 768px) {
+  html {
+    scroll-padding-top: 7.5rem;
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+/* Hide scrollbars on horizontal scrollers while keeping them scrollable. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }

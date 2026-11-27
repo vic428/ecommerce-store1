@@ -35,7 +35,7 @@ export const businessSchema = z.object({
     .array(
       z.object({
         platform: z.enum(["facebook", "x", "instagram", "youtube", "linkedin", "tiktok", "whatsapp"]),
-        url: z.url(),
+        url: z.url({ protocol: /^https$/ }),
       }),
     )
     .default([]),
@@ -98,7 +98,20 @@ export const featuresSchema = z.object({
   guestCheckout: z.boolean().default(true),
 });
 
-const navLink = z.object({ label: z.string(), href: z.string(), badge: z.string().optional() });
+/**
+ * Link targets that admins can configure: a same-site path, or an https/mailto/tel URL.
+ * Rejects javascript:, data:, protocol-relative ("//host") and other schemes.
+ */
+export const safeHref = z.string().refine((v) => {
+  if (/^\/(?![/\\])/.test(v)) return true;
+  try {
+    return ["https:", "mailto:", "tel:"].includes(new URL(v).protocol);
+  } catch {
+    return false;
+  }
+}, "Use a site path (/...) or an https://, mailto: or tel: link");
+
+const navLink = z.object({ label: z.string(), href: safeHref, badge: z.string().optional() });
 
 export const navigationSchema = z.object({
   main: z
@@ -156,7 +169,7 @@ export type SettingsInput = { [K in SettingKey]: z.input<(typeof settingsSchemas
 
 // ─── Homepage blocks ────────────────────────────────────────────────────────
 
-const cta = z.object({ label: z.string(), href: z.string() });
+const cta = z.object({ label: z.string(), href: safeHref });
 
 export const homepageBlockSchemas = {
   HERO: z.object({

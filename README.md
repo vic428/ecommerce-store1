@@ -7,8 +7,8 @@ configuration, not code.
 The bundled demo store is **ShopEase** (yellow/black, Naira prices). Everything ShopEase-specific
 lives in `src/config/` and `src/data/` and is marked `⚠ DEMO CONTENT`.
 
-**Status:** Phase 0 (foundation) — schema, config, seed and tooling are in place. The storefront
-UI starts in Phase 1. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** Phase 1 done: the themed storefront shell and homepage render from database settings.
+Shop, product, cart and checkout pages come next. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
@@ -29,8 +29,11 @@ npm run dev                 # http://localhost:3000
 ```
 
 No local Postgres? `npm run db:dev` runs Prisma's local Postgres server (no Docker needed).
-Copy the `postgres://…` URL it prints into `DATABASE_URL`. A hosted database (Neon, Supabase,
-RDS…) works the same way.
+Copy the `postgres://…` URL it prints into `DATABASE_URL`, and set `DATABASE_POOL_MAX="1"`: that
+local server only handles about one connection at a time. A hosted database (Neon, Supabase,
+RDS…) works the same way and needs no pool limit.
+
+`npm run build` prerenders pages from the database, so the database must be reachable when you build.
 
 ## Scripts
 
@@ -49,7 +52,9 @@ RDS…) works the same way.
 | `npm run db:studio`  | Browse the database                                     |
 | `npm run test:e2e`   | Playwright tests (desktop, tablet, mobile)              |
 
-First Playwright run: `npx playwright install chromium`.
+First Playwright run: `npx playwright install chromium`. Tests build and start the production
+app on port 3100 (set `E2E_DEV=1` to use the dev server instead) and expect the demo seed. Point
+`DATABASE_URL` at a test database, never a live store.
 
 ## Project layout
 

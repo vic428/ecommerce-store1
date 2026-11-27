@@ -11,7 +11,10 @@ function createClient() {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Copy .env.example to .env and fill it in.");
   }
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  // Optional pool cap. Prisma's local dev database (`npm run db:dev`) only handles about one
+  // connection at a time, so .env sets DATABASE_POOL_MAX=1 locally. Hosted Postgres can leave it unset.
+  const max = Number(process.env.DATABASE_POOL_MAX) || undefined;
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString, max }) });
 }
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
