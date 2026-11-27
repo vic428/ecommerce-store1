@@ -8,14 +8,22 @@ import type { PoolConfig } from "pg";
  * - Every other host is encrypted. If DATABASE_SSL_CA holds the provider's CA certificate (PEM
  *   text, e.g. Supabase → Project Settings → Database → SSL configuration), the server
  *   certificate is also verified.
- * - Without a CA the connection is encrypted but the server isn't verified. That is allowed only
- *   for development/test: Netlify production deploys (NETLIFY=true, CONTEXT=production) and any
- *   environment with DATABASE_SSL_REQUIRE_CA=true refuse to connect without DATABASE_SSL_CA.
+ * - Without a CA the connection is encrypted but the server isn't verified. By default that is
+ *   refused on Netlify production deploys (NETLIFY=true, CONTEXT=production) and wherever
+ *   DATABASE_SSL_REQUIRE_CA=true.
+ * - DATABASE_SSL_CA="false" is an explicit opt-out: encrypted, not verified, never refused.
+ *   ⚠ Interim setting until the CA certificate is added (see SETUP.md / BUSINESS_DECISIONS.md).
  */
 /** Environment variables as a plain map (so tests can pass a partial set). */
 type Env = Readonly<Record<string, string | undefined>>;
 
+/** DATABASE_SSL_CA="false" (any case) explicitly turns certificate verification off. */
+export function verificationOptedOut(env: Env): boolean {
+  return env.DATABASE_SSL_CA?.trim().toLowerCase() === "false";
+}
+
 export function requiresVerifiedTls(env: Env): boolean {
+  if (verificationOptedOut(env)) return false;
   if (env.DATABASE_SSL_REQUIRE_CA === "true") return true;
   return env.NETLIFY === "true" && env.CONTEXT === "production";
 }
@@ -39,7 +47,7 @@ export function pgPoolConfig(env: Env = process.env): PoolConfig {
   const url = new URL(connectionString);
   for (const p of ["sslmode", "ssl", "sslcert", "sslkey", "sslrootcert"]) url.searchParams.delete(p);
 
-  const ca = env.DATABASE_SSL_CA?.replace(/\\n/g, "\n").trim();
+  const ca = verificationOptedOut(env) ? undefined : env.DATABASE_SSL_CA?.replace(/\\n/g, "\n").trim();
   if (!isLocal && !ca && requiresVerifiedTls(env)) {
     throw new Error(
       "DATABASE_SSL_CA is required here so the database server certificate is verified. " +

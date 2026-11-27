@@ -5,11 +5,12 @@ as a final value. Grouped by what each one blocks.
 
 ## Blocking the next phase (M2: admin dashboard)
 
-| #   | Decision / input                  | What I need                                                                                                                                                                                         | Where it goes           |
-| --- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| 1   | ~~**Supabase dev/test project**~~ | **Done (2026-11-27):** existing GitHub-linked project, migrated, locked down and seeded. Production project still to create before launch.                                                          | `.env` (see `SETUP.md`) |
-| 2   | ~~**First super-admin**~~         | **Done (2026-11-27):** admin@varchstores.com created as SUPER_ADMIN (no password; set via /admin/login → Set or reset password).                                                                    | `npm run staff:create`  |
-| 3   | **Staff roles**                   | Confirm the three staff roles (Super Admin, Operations, Finance) and the permission split in `src/lib/auth/permissions.ts`. In particular: may Operations see merchant bank details? (currently no) | `permissions.ts`        |
+| #   | Decision / input                    | What I need                                                                                                                                                                                                                | Where it goes           |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| 1   | ~~**Supabase dev/test project**~~   | **Done (2026-11-27):** existing GitHub-linked project, migrated, locked down and seeded. Production project still to create before launch.                                                                                 | `.env` (see `SETUP.md`) |
+| 2   | ~~**First super-admin**~~           | **Done (2026-11-27):** admin@varchstores.com created as SUPER_ADMIN (no password; set via /admin/login → Set or reset password).                                                                                           | `npm run staff:create`  |
+| 3a  | **Database certificate on Netlify** | Netlify currently runs with `DATABASE_SSL_CA="false"` (encrypted, server not verified). Before launch, paste Supabase's CA certificate (Project Settings → Database → SSL configuration) into Netlify's `DATABASE_SSL_CA`. | Netlify env vars        |
+| 3   | **Staff roles**                     | Confirm the three staff roles (Super Admin, Operations, Finance) and the permission split in `src/lib/auth/permissions.ts`. In particular: may Operations see merchant bank details? (currently no)                        | `permissions.ts`        |
 
 ## Commercial terms
 

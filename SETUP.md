@@ -80,6 +80,8 @@ For each project (dev/test now, production later):
    Netlify production deploys**: the app refuses to connect there without it. Elsewhere,
    connections without it are encrypted but unverified (set `DATABASE_SSL_REQUIRE_CA="true"` to
    enforce verification in any environment).
+   **Interim opt-out:** `DATABASE_SSL_CA="false"` lets a Netlify production deploy connect
+   encrypted but unverified. Replace it with the real certificate before launch.
 4. **Integrations → GitHub**: leave automatic migration deploys off. This repo's migrations
    are in `prisma/migrations`, applied deliberately with `npm run db:deploy`.
 5. **Authentication → URL configuration**: set **Site URL** to the app's URL

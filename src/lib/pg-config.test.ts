@@ -39,6 +39,18 @@ describe("pgPoolConfig", () => {
     );
   });
 
+  test('DATABASE_SSL_CA="false" opts out: encrypted, unverified, allowed on Netlify production', () => {
+    for (const value of ["false", "FALSE", " false "]) {
+      const cfg = pgPoolConfig({
+        DATABASE_URL: remote,
+        NETLIFY: "true",
+        CONTEXT: "production",
+        DATABASE_SSL_CA: value,
+      });
+      assert.deepEqual(cfg.ssl, { rejectUnauthorized: false }, value);
+    }
+  });
+
   test("DATABASE_SSL_REQUIRE_CA=true enforces verification anywhere", () => {
     assert.throws(() => pgPoolConfig({ DATABASE_URL: remote, DATABASE_SSL_REQUIRE_CA: "true" }));
   });
