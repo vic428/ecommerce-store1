@@ -1,6 +1,13 @@
 # Architecture change: single-store template → VARCH multi-vendor marketplace
 
-Status: **Phase M1 (foundation) in progress** on branch `marketplace-pivot`.
+Status (on `main`):
+
+- **M1 foundation: done.** Running on the Supabase dev/test project.
+- **M2 admin operations: in progress.**
+  - Slice 1 done: staff sign-in (Supabase Auth, server actions), set/reset password by email,
+    session refresh (`src/proxy.ts`), role-gated admin shell, real-data dashboard, audit log of
+    sign-ins/outs and password changes, `npm run staff:create`.
+  - Next: merchants (slice 2), then products, categories and inventory (slice 3).
 
 ## 1. What existed before the pivot
 

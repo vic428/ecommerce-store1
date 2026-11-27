@@ -19,11 +19,16 @@
     "db:studio": "prisma studio",
     "test:e2e": "playwright test",
     "test:unit": "node --import tsx --test \"src/**/*.test.ts\"",
-    "db:check-rls": "tsx scripts/check-rls.ts"
+    "db:check-rls": "tsx scripts/check-rls.ts",
+    "staff:create": "tsx scripts/create-staff.ts",
+    "e2e:env": "tsx scripts/ensure-test-accounts-env.ts",
+    "e2e:accounts": "npm run e2e:env && tsx scripts/create-staff.ts --email e2e-admin@example.com --role SUPER_ADMIN --name \"E2E Admin\" --password-env E2E_ADMIN_PASSWORD && tsx scripts/create-staff.ts --email e2e-customer@example.com --role CUSTOMER --name \"E2E Customer\" --password-env E2E_CUSTOMER_PASSWORD"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.2",
     "lucide-react": "^1.81.0",
     "next": "16.4.6",
     "pg": "^8.23.1",

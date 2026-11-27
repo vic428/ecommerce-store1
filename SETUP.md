@@ -44,14 +44,32 @@ npm run test:e2e          # builds and starts the app, then runs desktop/tablet/
 E2E tests write to the database (newsletter sign-ups), so point them at the dev/test project,
 never production.
 
+## Staff accounts
+
+```bash
+npm run staff:create -- --email someone@varchstores.com --role OPERATIONS --name "Full Name"
+```
+
+Roles: `SUPER_ADMIN`, `OPERATIONS`, `FINANCE` (see `src/lib/auth/permissions.ts`). The account
+is created **without a password**: the person opens `/admin/login` → **Set or reset password**,
+gets an email link, and chooses their own. Re-running the command adds a role to an existing
+account. Supabase's built-in email sender allows only a few emails per hour; configure custom
+SMTP (Authentication → Emails) before production.
+
+Test accounts for the automated tests: `npm run e2e:accounts` generates random passwords into
+`.env` (never printed) and creates `e2e-admin@example.com` (SUPER_ADMIN) and
+`e2e-customer@example.com` (CUSTOMER) in the dev/test project. Never run it against production.
+
 ## Supabase projects
 
 For each project (dev/test now, production later):
 
 1. **Connect** dialog → connection string:
-   - **Direct** (`db.<ref>.supabase.co:5432`, user `postgres`): fine from a PC with IPv6.
    - **Session pooler** (`aws-0-<region>.pooler.supabase.com:5432`, user `postgres.<ref>`):
-     works everywhere (IPv4). **Use this on Netlify.**
+     **use this everywhere** (local, CI, Netlify). It works over IPv4. Dev/test project:
+     `eu-west-1`, ~150–270 ms per round trip from Lagos.
+   - **Direct** (`db.<ref>.supabase.co:5432`, user `postgres`): IPv6-only on the free plan.
+     Avoid: it dropped connections intermittently during testing.
    - Replace `[YOUR-PASSWORD]` (brackets included) with the database password. Letters and
      digits only avoids URL-encoding problems.
 2. **Project Settings → API Keys**: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` (public) and
@@ -64,8 +82,13 @@ For each project (dev/test now, production later):
    enforce verification in any environment).
 4. **Integrations → GitHub**: leave automatic migration deploys off. This repo's migrations
    are in `prisma/migrations`, applied deliberately with `npm run db:deploy`.
-5. **Authentication → URL configuration** (M2): site URL and redirect URLs for the matching
-   Netlify domain.
+5. **Authentication → URL configuration**: set **Site URL** to the app's URL
+   (`http://localhost:3000` for dev) and add `<site>/admin/auth/callback` to **Redirect URLs**
+   (for dev: `http://localhost:3000/admin/auth/callback`). Password emails only work for listed
+   URLs. The app builds these links from `NEXT_PUBLIC_SITE_URL`, never from the request.
+   **Authentication → Sign In / Providers**: turn off **Allow new users to sign up** until
+   customer accounts arrive (M3). The app never signs users up itself; staff are created with
+   `npm run staff:create`.
 6. Apply migrations: `npm run db:deploy`, then `npm run db:check-rls`.
 7. Production only: seed settings and categories with `npm run db:seed -- --no-demo`. Never load
    demo merchants into production.

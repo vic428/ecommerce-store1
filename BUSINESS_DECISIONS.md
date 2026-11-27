@@ -8,7 +8,7 @@ as a final value. Grouped by what each one blocks.
 | #   | Decision / input                  | What I need                                                                                                                                                                                         | Where it goes           |
 | --- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | 1   | ~~**Supabase dev/test project**~~ | **Done (2026-11-27):** existing GitHub-linked project, migrated, locked down and seeded. Production project still to create before launch.                                                          | `.env` (see `SETUP.md`) |
-| 2   | **First super-admin**             | The email address of the first VARCH super admin (yourself?).                                                                                                                                       | Bootstrap script in M2  |
+| 2   | ~~**First super-admin**~~         | **Done (2026-11-27):** admin@varchstores.com created as SUPER_ADMIN (no password; set via /admin/login → Set or reset password).                                                                    | `npm run staff:create`  |
 | 3   | **Staff roles**                   | Confirm the three staff roles (Super Admin, Operations, Finance) and the permission split in `src/lib/auth/permissions.ts`. In particular: may Operations see merchant bank details? (currently no) | `permissions.ts`        |
 
 ## Commercial terms
